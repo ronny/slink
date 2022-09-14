@@ -1,0 +1,22 @@
+{
+  "go.formatTool": "gofumports",
+  "go.lintFlags": [],
+  "go.lintOnSave": "package",
+  "go.lintTool": "staticcheck",
+  "go.testEnvVars": {
+    "ENV": "test"
+  },
+  "go.testFlags": [
+    "-count=1",
+    "-race",
+  ],
+  "go.useLanguageServer": true,
+  "gopls": {
+    // Add parameter placeholders when completing a function.
+    "usePlaceholders": true,
+    // If true, enable additional analyses with staticcheck.
+    // Warning: This will significantly increase memory usage.
+    "staticcheck": true,
+    "gofumpt": true,
+  },
+}
