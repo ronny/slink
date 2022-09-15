@@ -17,6 +17,7 @@ import (
 	"github.com/ronny/slink/debug"
 	"github.com/ronny/slink/ids"
 	"github.com/ronny/slink/storage"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.uber.org/automaxprocs/maxprocs"
 )
@@ -27,7 +28,6 @@ func main() {
 	maxprocs.Set(maxprocs.Logger(log.Info().Msgf))
 
 	fs := flag.NewFlagSet("slink-public-server", flag.ExitOnError)
-
 	var (
 		listenAddr          = fs.String("listen-addr", ":8080", "the host:port address where the server should listen to")
 		length              = fs.Int("length", 10, "the length of the ID to generate")
@@ -39,9 +39,10 @@ func main() {
 		dynamodbEndpoint    = fs.String("dynamodb-endpoint", "", "custom dynamodb endpoint URL to use, e.g. `http://localhost:8000` for dynamodb-local (optional)")
 		awsAccessKeyID      = fs.String("aws-access-key-id", "", "override AWS_ACCESS_KEY_ID used for dynamodb, only for local development with dynamodb-local, useful for namespacing a shared dynamodb-local (optional)")
 		debugListenAddr     = fs.String("debug-listen-addr", "", "the host:port address where the debug server should listen to (optional, only launched when specified)")
+		fallbackRedirectURL = fs.String("fallback-redirect-url", "", "when specified, and a lookup can't find a ShortLink, then it redirects to this URL as a fallback (optional)")
+		prettyLog           = fs.Bool("pretty-log", true, "whether to pretty-print logs, or json")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
-
 	err := ff.Parse(fs, os.Args[1:],
 		ff.WithEnvVarNoPrefix(),
 		ff.WithConfigFileFlag("config"),
@@ -49,6 +50,10 @@ func main() {
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("ff.Parse")
+	}
+
+	if *prettyLog {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
 	ctx, cancelCtx := context.WithTimeout(context.Background(), BootTimeout)
@@ -131,12 +136,19 @@ func main() {
 		Int("denylistMaxAttempts", *denylistMaxAttempts).
 		Str("denylistFilename", *denylistFilename).
 		Str("debugListenAddr", *debugListenAddr).
-		Msgf("slink-public-server listening on %s", *listenAddr)
+		Str("fallback-redirect-url", *fallbackRedirectURL).
+		Msg("slink-public-server flags")
 
-	publicServer, err := NewPublicServer(ctx,
+	publicServerOpts := []func(*PublicServer){
 		WithListenAddr(*listenAddr),
 		WithSlinkOptions(slinkOptions...),
-	)
+	}
+
+	if *fallbackRedirectURL != "" {
+		publicServerOpts = append(publicServerOpts, WithFallbackRedirectURL(*fallbackRedirectURL))
+	}
+
+	publicServer, err := NewPublicServer(ctx, publicServerOpts...)
 	if err != nil {
 		log.Fatal().Err(err).Msg("NewPublicServer")
 	}

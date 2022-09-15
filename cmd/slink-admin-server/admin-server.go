@@ -166,6 +166,7 @@ func (s *AdminServer) handleGetShortLink() http.HandlerFunc {
 		}
 
 		if shortLink == nil {
+			log.Debug().Str("shortLinkID", shortLinkID).Msg("handleGetShortLink: short link not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

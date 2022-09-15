@@ -8,7 +8,7 @@ import (
 
 const (
 	// The alphabet that can make up an ID, every char should be safe for use in URLs without extra encoding
-	NanoIDDefaultCharacters = "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
+	NanoIDDefaultCharacters = "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	NanoIDDefaultLength     = 10
 	// the default max number of attempts to generate an ID until it doesn't
 	// match anything in the denylist

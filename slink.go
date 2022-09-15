@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/ronny/slink/ids"
 	"github.com/ronny/slink/models"
 	"github.com/ronny/slink/storage"
+	"github.com/rs/zerolog/log"
 )
 
 type Slink struct {
-	idgen   ids.Generator
-	storage storage.Storage
+	idgen    ids.Generator
+	storage  storage.Storage
+	lruCache *lru.Cache
 }
 
 type CreateInput struct {
@@ -78,6 +81,38 @@ func (s *Slink) CreateShortLink(ctx context.Context, input *CreateInput) (*model
 	return shortLink, nil
 }
 
+// GetShortLinkByIDWithCache looks up ShortLink by the given ID from the LRU
+// cache first, if found it returns it, otherwise it looks the ShortLink up in
+// the storage, and returns it if it's found in the storage, adding it to the
+// LRU cache if found, or it returns nil otherwise.
+func (s *Slink) GetShortLinkByIDWithCache(ctx context.Context, shortLinkID string) (*models.ShortLink, error) {
+	if shortLinkID == "" {
+		return nil, &ErrInvalidShortLinkID{msg: "short link ID must not be empty"}
+	}
+
+	if s.lruCache != nil {
+		if item, found := s.lruCache.Get(shortLinkID); found {
+			if shortLink, ok := item.(*models.ShortLink); ok {
+				return shortLink, nil
+			}
+			log.Warn().Msgf("found item in LRU cache but failed to assert as *models.ShortLink, ignoring: %+v", item)
+		}
+	}
+
+	shortLink, err := s.GetShortLinkByID(ctx, shortLinkID)
+	if err != nil {
+		return nil, fmt.Errorf("storage.Get: %w", err)
+	}
+
+	if s.lruCache != nil {
+		evicted := s.lruCache.Add(shortLinkID, shortLink)
+		log.Debug().Bool("evicted", evicted).Msg("added shortLink to LRU cache")
+	}
+
+	return shortLink, nil
+}
+
+// GetShortLinkByID looks up a ShortLink by its ID, returing it if found, or nil otherwise.
 func (s *Slink) GetShortLinkByID(ctx context.Context, shortLinkID string) (*models.ShortLink, error) {
 	if shortLinkID == "" {
 		return nil, &ErrInvalidShortLinkID{msg: "short link ID must not be empty"}
@@ -105,7 +140,14 @@ func (s *Slink) GetShortLinksByURL(ctx context.Context, linkURL string) ([]*mode
 }
 
 func NewSlink(ctx context.Context, options ...func(*Slink)) (*Slink, error) {
-	s := &Slink{}
+	lruCache, err := lru.New(1000)
+	if err != nil {
+		return nil, fmt.Errorf("lru.New: %w", err)
+	}
+
+	s := &Slink{
+		lruCache: lruCache,
+	}
 
 	for _, option := range options {
 		option(s)

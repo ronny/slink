@@ -16,9 +16,10 @@ import (
 
 type PublicServer struct {
 	*http.Server
-	router       *httprouter.Router
-	svc          *slink.Slink
-	slinkOptions []func(*slink.Slink)
+	router              *httprouter.Router
+	svc                 *slink.Slink
+	fallbackRedirectURL string
+	slinkOptions        []func(*slink.Slink)
 }
 
 const (
@@ -78,7 +79,7 @@ func (s *PublicServer) handleShortLinkLookup() http.HandlerFunc {
 
 		shortLinkID := params.ByName("id")
 
-		shortLink, err := s.svc.GetShortLinkByID(r.Context(), shortLinkID)
+		shortLink, err := s.svc.GetShortLinkByIDWithCache(r.Context(), shortLinkID)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 
@@ -88,11 +89,23 @@ func (s *PublicServer) handleShortLinkLookup() http.HandlerFunc {
 		}
 
 		if shortLink == nil {
+			if s.fallbackRedirectURL != "" {
+				w.Header().Add("Location", s.fallbackRedirectURL)
+				w.WriteHeader(http.StatusTemporaryRedirect)
+				return
+			}
+
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		if shortLink.Expired() {
+			if s.fallbackRedirectURL != "" {
+				w.Header().Add("Location", s.fallbackRedirectURL)
+				w.WriteHeader(http.StatusTemporaryRedirect)
+				return
+			}
+
 			w.WriteHeader(http.StatusGone)
 			return
 		}
@@ -111,5 +124,11 @@ func WithListenAddr(addr string) func(*PublicServer) {
 func WithSlinkOptions(slinkOptions ...func(*slink.Slink)) func(*PublicServer) {
 	return func(ps *PublicServer) {
 		ps.slinkOptions = slinkOptions
+	}
+}
+
+func WithFallbackRedirectURL(fallbackRedirectURL string) func(*PublicServer) {
+	return func(ps *PublicServer) {
+		ps.fallbackRedirectURL = fallbackRedirectURL
 	}
 }
