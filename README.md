@@ -20,7 +20,10 @@ It’s designed for secure, observable, and scalable production use.
   - single table pattern based on best practices recommended by
     [The DynamoDB Book](https://dynamodbbook.com)
 - Expiring links
+  - an optional `ExpiresAt` can be supplied when creating ShortLink
+  - the public server will only redirect when the ShortLink has no expiry or is not yet expired
 - Fallback redirect URL for missing or expired links
+  - or respond 404 when the fallback URL is not specified
 - LRU cache for public lookups/redirects (in-memory, per-process only)
 - Built-in Prometheus (operational) metrics and pprof
   - running on a separate debug server in the same processs
@@ -38,16 +41,23 @@ It’s designed for secure, observable, and scalable production use.
 
 ## What's missing?
 
-I’m planning to add these:
+I’m planning to add these (eventually):
 
 - handle generated ID collision properly
 - some form of authentication for the admin API
 - published public docker image
-- Kubernetes deployment documentation
+- Kubernetes deployment:
+  - healthcheck routes
+  - documentation
 - tests
 - preventing too many redirects to self
-- more APIs:
-  - delete short links
+- more admin APIs:
+  - update short link target URL (correct mistake on already published short link, swap target after embargo date, etc)
+  - delete short links by ID (due to mistake, abuse, disappearing target, etc)
+  - delete short links by URL
+- normalising Link URLs before generating a ShortLink for it
+  - lower/upper case
+  - query params ordering
 
 I have no plans to add these:
 
@@ -80,15 +90,38 @@ I have no plans to add these:
   - any authenticated client that can hit the Admin API can do everything
   - do it elsewhere (proxy or client)
 
-## Deployment
+## The public and admin servers
 
-### Kubernetes
+TODO: Why?
+
+TODO: What?
+
+## Configuration
+
+`slink` uses [`ff`](https://github.com/peterbourgon/ff) with JSON config file option for the configuration so that you
+can specify the configuration either via CLI flags, or via a JSON file, or both (the CLI flags take precedence).
+
+
+### `slink-public-server`
+
+See the `FlagSet` in [cmd/slink-admin-server/main.go](./cmd/slink-admin-server/main.go) for all available options.
+
+Or, you can also do `go run cmd/slink-public-server -help`.
+
+### `slink-admin-server`
+
+See the FlagSet in [cmd/slink-public-server/main.go](./cmd/slink-public-server/main.go) for all available options.
+
+Or, you can also do `go run cmd/slink-admin-server -help`.
+
+## Kubernetes Deployment
 
 TODO
 
 ## Docker
 
 TODO: link to Docker hub.
+
 TODO: update instructions below to use the public docker image.
 
 Run `slink-admin-server` locally against dynamodb-local (assuming dynamodb-local
