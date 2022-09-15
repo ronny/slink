@@ -32,4 +32,6 @@ USER nobody
 
 ENV TZ=UTC
 
+WORKDIR /
+
 CMD ["/bin/slink-public-server"]

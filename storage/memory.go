@@ -7,10 +7,17 @@ import (
 	"github.com/ronny/slink/models"
 )
 
+// MemoryStorage implements the Storage interface using `sync.Map`s (in-memory
+// hash maps) as the storage backend.
+//
+// MemoryStorage is intended to be used only in development or testing, NOT in
+// production.
 type MemoryStorage struct {
 	linkByID  *sync.Map
 	linkByURL *sync.Map
 }
+
+var _ Storage = (*DynamoDBStorage)(nil)
 
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{

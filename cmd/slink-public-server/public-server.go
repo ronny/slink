@@ -3,21 +3,27 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ronny/slink"
+	"github.com/ronny/slink/debug"
+	"github.com/rs/zerolog/log"
 )
 
 type PublicServer struct {
 	*http.Server
+	router       *httprouter.Router
 	svc          *slink.Slink
 	slinkOptions []func(*slink.Slink)
 }
 
-const DefaultTimeout = 5 * time.Second
+const (
+	DefaultHandlerTimeoutDuration = 5 * time.Second
+)
 
 func NewPublicServer(ctx context.Context, options ...func(*PublicServer)) (*PublicServer, error) {
 	s := &PublicServer{
@@ -38,29 +44,56 @@ func NewPublicServer(ctx context.Context, options ...func(*PublicServer)) (*Publ
 		return nil, fmt.Errorf("slink.NewSlink: %w", err)
 	}
 
-	router := httprouter.New()
-	router.GET("/:id", s.handleShortLinkLookup())
-	s.Handler = router
+	s.router = httprouter.New()
+	s.apiRoute(http.MethodGet, "/:id", s.handleShortLinkLookup())
+	s.Handler = s.router
 
 	return s, nil
 }
 
-func (s *PublicServer) handleShortLinkLookup() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+func (s *PublicServer) apiRoute(method, path string, handler http.Handler) {
+	labelsWithPath := prometheus.Labels{"path": path}
+
+	s.router.Handler(
+		method,
+		path,
+		http.TimeoutHandler(
+			promhttp.InstrumentHandlerDuration(
+				debug.IncomingRequestDurations().MustCurryWith(labelsWithPath),
+				promhttp.InstrumentHandlerCounter(
+					debug.IncomingRequests().MustCurryWith(labelsWithPath),
+					handler,
+				),
+			),
+			DefaultHandlerTimeoutDuration,
+			"timed out",
+		),
+	)
+}
+
+func (s *PublicServer) handleShortLinkLookup() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		params := httprouter.ParamsFromContext(ctx)
+
 		shortLinkID := params.ByName("id")
 
 		shortLink, err := s.svc.GetShortLinkByID(r.Context(), shortLinkID)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 
-			// TODO: optional logger/error reporter accepted in NewPublicServer?
-			log.Printf("svc.GetShortLinkByID: %v — returning 500", err)
+			log.Error().Err(err).Msg("svc.GetShortLinkByID error, returning 500")
 
 			return
 		}
 
 		if shortLink == nil {
 			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if shortLink.Expired() {
+			w.WriteHeader(http.StatusGone)
 			return
 		}
 

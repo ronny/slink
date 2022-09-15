@@ -1,0 +1,5 @@
+{
+  "dynamodb-endpoint": "http://localhost:8000",
+  "aws-access-key-id": "slink",
+  "debug-listen-addr": ":19101"
+}

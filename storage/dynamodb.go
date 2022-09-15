@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/ronny/slink/models"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -21,12 +21,36 @@ const (
 	DynamoDBDefaultRegion    = "us-east-1"
 )
 
+// DynamoDBStorage implements the Storage interface using Amazon DynamoDB as the
+// backend.
+//
+// The DynamoDB table can be created elsewhere as long as it has the same
+// structure as used in `CreateTable`. `NewDynamoDBStorage` will create the
+// table automatically if the table doesn’t exist (requires
+// `dynamodb:CreateTable` IAM permission).
+//
+// The suggested method to supply AWS credentials to the process is by using a
+// dedicated IAM role.  DynamoDBStorage will use STS by default when available.
+// You can customise this by using `WithDynamoDBConfig` and supplying your own
+// AWS Config.
+//
+// The minimum required permissions are:
+// - `dynamodb:PutItem`
+// - `dynamodb:GetItem`
+// - `dynamodb:Query`
+// - `dynamodb:DescribeTable`
+// - `dynamodb:CreateTable` (only if you want the table to be created automatically)
+//
+// (or check `DynamoDBClient` interface if this list is out of date)
 type DynamoDBStorage struct {
 	tableName string
 	gsi1Name  string
+	region    string
 	awsConfig *aws.Config
 	client    DynamoDBClient
 }
+
+var _ Storage = (*DynamoDBStorage)(nil)
 
 func (d *DynamoDBStorage) Store(ctx context.Context, shortLink *models.ShortLink) error {
 	item := &ddbShortLinkItem{
@@ -35,7 +59,7 @@ func (d *DynamoDBStorage) Store(ctx context.Context, shortLink *models.ShortLink
 		PK:        shortLink.ID,
 		SK:        shortLink.ID,
 		GSI1PK:    shortLink.LinkURL,
-		GSI1SK:    shortLink.ID,
+		GSI1SK:    shortLink.CreatedAt,
 	}
 
 	avItem, err := attributevalue.MarshalMap(item)
@@ -84,6 +108,7 @@ func (d *DynamoDBStorage) GetByURL(ctx context.Context, linkURL string) ([]*mode
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":gsi1pk": &types.AttributeValueMemberS{Value: linkURL},
 		},
+		ScanIndexForward: aws.Bool(false), // most recently created first
 		// TODO: ExclusiveStartKey
 		// TODO: Limit
 	})
@@ -115,6 +140,11 @@ type ddbShortLinkItem struct {
 	GSI1SK string `dynamodbav:"gsi1sk"`
 }
 
+// NewDynamoDBStorage returns an initialised `*DynamoDBStorage`.
+//
+// It checks if the DynamoDB table exists, if not it will create one first. This
+// may fail if the assumed IAM role (or user) doesn't have
+// `dynamodb:CreateTable` permission.
 func NewDynamoDBStorage(ctx context.Context, options ...func(*DynamoDBStorage)) (*DynamoDBStorage, error) {
 	s := &DynamoDBStorage{}
 
@@ -124,6 +154,10 @@ func NewDynamoDBStorage(ctx context.Context, options ...func(*DynamoDBStorage)) 
 
 	if s.tableName == "" {
 		s.tableName = DynamoDBDefaultTableName
+	}
+
+	if s.region == "" {
+		s.tableName = DynamoDBDefaultRegion
 	}
 
 	if s.gsi1Name == "" {
@@ -143,7 +177,7 @@ func NewDynamoDBStorage(ctx context.Context, options ...func(*DynamoDBStorage)) 
 		s.client = dynamodb.NewFromConfig(*s.awsConfig)
 	}
 
-	err := s.ensureTable(ctx)
+	err := s.EnsureTable(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +185,7 @@ func NewDynamoDBStorage(ctx context.Context, options ...func(*DynamoDBStorage)) 
 	return s, nil
 }
 
-func (s *DynamoDBStorage) ensureTable(ctx context.Context) error {
+func (s *DynamoDBStorage) EnsureTable(ctx context.Context) error {
 	var err error
 	backoffSchedule := []time.Duration{
 		1 * time.Second,
@@ -171,9 +205,9 @@ func (s *DynamoDBStorage) ensureTable(ctx context.Context) error {
 		if err != nil {
 			var rnfe *types.ResourceNotFoundException
 			if errors.As(err, &rnfe) {
-				log.Println("table missing")
+				log.Warn().Msg("table missing")
 				{
-					err := s.createTable(ctx)
+					err := s.CreateTable(ctx)
 					if err != nil {
 						return err
 					}
@@ -182,7 +216,7 @@ func (s *DynamoDBStorage) ensureTable(ctx context.Context) error {
 				return fmt.Errorf("client.DescribeTable: %w", err)
 			}
 		}
-		log.Printf("waiting for %s...", backoff)
+		log.Info().Msgf("waiting for %s...", backoff)
 		time.Sleep(backoff)
 	}
 	if err != nil {
@@ -191,7 +225,7 @@ func (s *DynamoDBStorage) ensureTable(ctx context.Context) error {
 	return nil
 }
 
-func (s *DynamoDBStorage) createTable(ctx context.Context) error {
+func (s *DynamoDBStorage) CreateTable(ctx context.Context) error {
 	if s.client == nil {
 		return errors.New("BUG: createTable called before s.client is set")
 	}
@@ -199,7 +233,7 @@ func (s *DynamoDBStorage) createTable(ctx context.Context) error {
 		return errors.New("BUG: createTable called before s.tableName is set")
 	}
 
-	log.Println("creating table...")
+	log.Info().Msg("creating table...")
 
 	_, err := s.client.CreateTable(ctx, &dynamodb.CreateTableInput{
 		TableName:   aws.String(s.tableName),
@@ -237,6 +271,12 @@ func WithDynamoDBTableName(tableName string) func(*DynamoDBStorage) {
 func WithDynamoDBGSI1Name(gsi1Name string) func(*DynamoDBStorage) {
 	return func(s *DynamoDBStorage) {
 		s.gsi1Name = gsi1Name
+	}
+}
+
+func WithDynamoDBRegion(region string) func(*DynamoDBStorage) {
+	return func(s *DynamoDBStorage) {
+		s.region = region
 	}
 }
 

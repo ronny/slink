@@ -1,5 +1,5 @@
 package ids
 
 type Generator interface {
-	GenerateID() string
+	GenerateID() (string, error)
 }
