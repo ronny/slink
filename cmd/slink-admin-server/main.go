@@ -31,7 +31,7 @@ func main() {
 
 	var (
 		listenAddr          = fs.String("listen-addr", ":9090", "the host:port address where the ddmin server should listen to")
-		length              = fs.Int("length", 10, "the length of the ID to generate")
+		length              = fs.Int("length", 10, "the length of the ID to generate, see https://zelark.github.io/nano-id-cc/")
 		chars               = fs.String("chars", ids.NanoIDDefaultCharacters, "the allowed characters used for generating IDs")
 		denylistFilename    = fs.String("denylist", "", "custom denylist.txt file to use for checking generated IDs (optional)")
 		denylistMaxAttempts = fs.Int("denylist-max-attempts", 10, "max number of attempts generating an ID and comparing against denylist before giving up")
@@ -40,7 +40,8 @@ func main() {
 		dynamodbEndpoint    = fs.String("dynamodb-endpoint", "", "custom dynamodb endpoint URL to use, e.g. `http://localhost:8000` for dynamodb-local (optional)")
 		awsAccessKeyID      = fs.String("aws-access-key-id", "", "override AWS_ACCESS_KEY_ID used for dynamodb, only for local development with dynamodb-local, useful for namespacing a shared dynamodb-local (optional)")
 		debugListenAddr     = fs.String("debug-listen-addr", "", "the host:port address where the debug server should listen to (optional, only launched when specified)")
-		prettyLog           = fs.Bool("pretty-log", true, "whether to pretty-print logs, or json")
+		prettyLog           = fs.Bool("pretty-log", false, "whether to enable logs pretty-printing (inefficient), otherwise json")
+		logLevel            = fs.String("log-level", "info", "set the minimum log level")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
 
@@ -53,8 +54,16 @@ func main() {
 		log.Fatal().Err(err).Msg("ff.Parse")
 	}
 
-	if *prettyLog {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	{
+		level, err := zerolog.ParseLevel(*logLevel)
+		if err != nil {
+			log.Fatal().Err(err).Msg("zerolog.ParseLevel")
+		}
+		zerolog.SetGlobalLevel(level)
+
+		if *prettyLog {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		}
 	}
 
 	ctx, cancelCtx := context.WithTimeout(context.Background(), BootTimeout)

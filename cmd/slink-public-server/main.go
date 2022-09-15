@@ -35,7 +35,8 @@ func main() {
 		awsAccessKeyID      = fs.String("aws-access-key-id", "", "override AWS_ACCESS_KEY_ID used for dynamodb, only for local development with dynamodb-local, useful for namespacing a shared dynamodb-local (optional)")
 		debugListenAddr     = fs.String("debug-listen-addr", "", "the host:port address where the debug server should listen to (optional, only launched when specified)")
 		fallbackRedirectURL = fs.String("fallback-redirect-url", "", "when specified, and a lookup can't find a ShortLink, then it redirects to this URL as a fallback (optional)")
-		prettyLog           = fs.Bool("pretty-log", true, "whether to pretty-print logs, or json")
+		prettyLog           = fs.Bool("pretty-log", false, "whether to enable logs pretty-printing (inefficient), otherwise json")
+		logLevel            = fs.String("log-level", "info", "set the minimum log level")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
 	err := ff.Parse(fs, os.Args[1:],
@@ -47,8 +48,16 @@ func main() {
 		log.Fatal().Err(err).Msg("ff.Parse")
 	}
 
-	if *prettyLog {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	{
+		level, err := zerolog.ParseLevel(*logLevel)
+		if err != nil {
+			log.Fatal().Err(err).Msg("zerolog.ParseLevel")
+		}
+		zerolog.SetGlobalLevel(level)
+
+		if *prettyLog {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		}
 	}
 
 	ctx, cancelCtx := context.WithTimeout(context.Background(), BootTimeout)
