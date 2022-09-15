@@ -15,7 +15,6 @@ import (
 	"github.com/peterbourgon/ff/v3"
 	"github.com/ronny/slink"
 	"github.com/ronny/slink/debug"
-	"github.com/ronny/slink/ids"
 	"github.com/ronny/slink/storage"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,10 +29,6 @@ func main() {
 	fs := flag.NewFlagSet("slink-public-server", flag.ExitOnError)
 	var (
 		listenAddr          = fs.String("listen-addr", ":8080", "the host:port address where the server should listen to")
-		length              = fs.Int("length", 10, "the length of the ID to generate")
-		chars               = fs.String("chars", ids.NanoIDDefaultCharacters, "the allowed characters used for generating IDs")
-		denylistFilename    = fs.String("denylist", "", "custom denylist.txt file to use for checking generated IDs (optional)")
-		denylistMaxAttempts = fs.Int("denylist-max-attempts", 10, "max number of attempts generating an ID and comparing against denylist before giving up")
 		dynamodbTableName   = fs.String("dynamodb-tablename", storage.DynamoDBDefaultTableName, "the dynamodb table name")
 		dynamodbRegion      = fs.String("dynamodb-region", storage.DynamoDBDefaultRegion, "the dynamodb region")
 		dynamodbEndpoint    = fs.String("dynamodb-endpoint", "", "custom dynamodb endpoint URL to use, e.g. `http://localhost:8000` for dynamodb-local (optional)")
@@ -102,39 +97,9 @@ func main() {
 		slinkOptions = append(slinkOptions, slink.WithStorage(ddblocal))
 	}
 
-	// ID Generator
-	{
-		nanoidOpts := []func(*ids.NanoIDGenerator){
-			ids.WithNanoIDLength(*length),
-			ids.WithNanoIDCustomASCII(*chars),
-			ids.WithNanoIDMaxAttempts(*denylistMaxAttempts),
-		}
-
-		if *denylistFilename != "" {
-			denylist, err := ids.LoadDenylist(*denylistFilename)
-			if err != nil {
-				log.Fatal().
-					Err(err).
-					Str("denylistFilename", *denylistFilename).
-					Msg("LoadDenylist")
-			}
-			nanoidOpts = append(nanoidOpts, ids.WithNanoIDDenylist(denylist))
-		}
-
-		nanoidGenerator, err := ids.NewNanoIDGenerator(nanoidOpts...)
-		if err != nil {
-			log.Fatal().Err(err).Msg("NewNanoIDGenerator")
-		}
-		slinkOptions = append(slinkOptions, slink.WithIDGenerator(nanoidGenerator))
-	}
-
 	log.Info().
 		Str("dynamodbEndpoint", *dynamodbEndpoint).
 		Str("awsAccessKeyID", *awsAccessKeyID).
-		Int("length", *length).
-		Str("chars", *chars).
-		Int("denylistMaxAttempts", *denylistMaxAttempts).
-		Str("denylistFilename", *denylistFilename).
 		Str("debugListenAddr", *debugListenAddr).
 		Str("fallback-redirect-url", *fallbackRedirectURL).
 		Msg("slink-public-server flags")

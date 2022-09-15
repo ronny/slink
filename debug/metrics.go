@@ -11,13 +11,9 @@ const Namespace = "slink"
 type Metrics struct {
 	incomingRequests         *prometheus.CounterVec
 	incomingRequestDurations *prometheus.HistogramVec
-
-	outgoingRequests         *prometheus.CounterVec
-	outgoingRequestDurations *prometheus.HistogramVec
-
-	shortLinkCreations *prometheus.CounterVec
-	deniedShortLinkIDs *prometheus.CounterVec
-	redirects          *prometheus.CounterVec
+	shortLinkCreations       *prometheus.CounterVec
+	deniedShortLinkIDs       *prometheus.CounterVec
+	redirects                *prometheus.CounterVec
 }
 
 var globalMetrics *Metrics
@@ -35,14 +31,6 @@ func init() {
 			Namespace: Namespace,
 			Name:      "incoming_request_duration_seconds",
 		}, []string{"path"}),
-		outgoingRequests: promauto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: Namespace,
-			Name:      "outgoing_requests_total",
-		}, []string{"host", "path", "code"}), // must match NewCounterRoundTripper in roundtripper.go
-		outgoingRequestDurations: promauto.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: Namespace,
-			Name:      "outgoing_request_duration_seconds",
-		}, []string{"host", "path", "code"}), // must match NewDurationRoundTripper in roundtripper.go
 		shortLinkCreations: promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace,
 			Name:      "short_link_creations_total",
