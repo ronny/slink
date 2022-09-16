@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.18
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.9.16
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.16.4
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jaevor/go-nanoid v1.3.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/peterbourgon/ff/v3 v3.3.0
@@ -32,7 +33,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
