@@ -21,6 +21,7 @@ type AdminServer struct {
 	router       *httprouter.Router
 	svc          *slink.Slink
 	slinkOptions []func(*slink.Slink)
+	authKeys     []AuthKey
 }
 
 const (
@@ -40,6 +41,10 @@ func NewAdminServer(ctx context.Context, options ...func(*AdminServer)) (*AdminS
 		option(s)
 	}
 
+	if len(s.authKeys) == 0 {
+		return nil, errors.New("missing authKeys, use WithAuthKeys to set at least one")
+	}
+
 	var err error
 	s.svc, err = slink.NewSlink(ctx, s.slinkOptions...)
 	if err != nil {
@@ -53,26 +58,6 @@ func NewAdminServer(ctx context.Context, options ...func(*AdminServer)) (*AdminS
 	s.Handler = s.router
 
 	return s, nil
-}
-
-func (s *AdminServer) apiRoute(method, path string, handler http.Handler) {
-	labelsWithPath := prometheus.Labels{"path": path}
-
-	s.router.Handler(
-		method,
-		path,
-		http.TimeoutHandler(
-			promhttp.InstrumentHandlerDuration(
-				debug.IncomingRequestDurations().MustCurryWith(labelsWithPath),
-				promhttp.InstrumentHandlerCounter(
-					debug.IncomingRequests().MustCurryWith(labelsWithPath),
-					handler,
-				),
-			),
-			DefaultHandlerTimeoutDuration,
-			"timed out",
-		),
-	)
 }
 
 func (s *AdminServer) handleGetOrCreateShortLink() http.HandlerFunc {
@@ -152,6 +137,8 @@ func (s *AdminServer) handleCreateShortLink() http.HandlerFunc {
 func (s *AdminServer) handleGetShortLink() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		keyID := authKeyIDFromContext(ctx)
+		log.Debug().Str("keyID", keyID).Msg("auth token matching")
 		params := httprouter.ParamsFromContext(ctx)
 
 		shortLinkID := params.ByName("id")
@@ -183,19 +170,47 @@ func (s *AdminServer) handleGetShortLink() http.HandlerFunc {
 	}
 }
 
+func (s *AdminServer) apiRoute(method, path string, h http.HandlerFunc) {
+	labelsWithPath := prometheus.Labels{"path": path}
+
+	s.router.Handler(
+		method,
+		path,
+		s.requireAuthToken(
+			http.TimeoutHandler(
+				promhttp.InstrumentHandlerDuration(
+					debug.IncomingRequestDurations().MustCurryWith(labelsWithPath),
+					promhttp.InstrumentHandlerCounter(
+						debug.IncomingRequests().MustCurryWith(labelsWithPath),
+						h,
+					),
+				),
+				DefaultHandlerTimeoutDuration,
+				"timed out",
+			).ServeHTTP,
+		),
+	)
+}
+
 func (s *AdminServer) Shutdown(ctx context.Context) error {
 	s.SetKeepAlivesEnabled(false)
 	return s.Server.Shutdown(ctx)
 }
 
 func WithListenAddr(addr string) func(*AdminServer) {
-	return func(ps *AdminServer) {
-		ps.Addr = addr
+	return func(s *AdminServer) {
+		s.Addr = addr
 	}
 }
 
 func WithSlinkOptions(slinkOptions ...func(*slink.Slink)) func(*AdminServer) {
-	return func(ps *AdminServer) {
-		ps.slinkOptions = slinkOptions
+	return func(s *AdminServer) {
+		s.slinkOptions = slinkOptions
+	}
+}
+
+func WithAuthKeys(authKeys []AuthKey) func(*AdminServer) {
+	return func(s *AdminServer) {
+		s.authKeys = authKeys
 	}
 }

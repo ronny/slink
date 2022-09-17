@@ -43,7 +43,6 @@ It’s designed for secure, observable, and scalable production use.
 
 I’m planning to add these (eventually):
 
-- some form of authentication for the admin API
 - published public docker image
 - Kubernetes deployment:
   - healthcheck routes

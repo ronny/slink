@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"net/http"
 	"os"
@@ -41,6 +42,7 @@ func main() {
 		prettyLog           = fs.Bool("pretty-log", false, "whether to enable logs pretty-printing (inefficient), otherwise json")
 		logLevel            = fs.String("log-level", "info", "set the minimum log level")
 		maxCreateAttempts   = fs.Int("max-create-attempts", slink.DefaultMaxCreateAttempts, "the maximum number of attempts for creating a short link with a newly generated ID (in case of collisions) (must be >= 1)")
+		authKeysJSON        = fs.String("auth-keys", "", "a list of {id, token} pairs used to authenticate client requests (in JSON format)")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
 
@@ -149,9 +151,19 @@ func main() {
 		Str("debugListenAddr", *debugListenAddr).
 		Msg("slink-admin-server flags")
 
+	var authKeys []AuthKey
+	err = json.Unmarshal([]byte(*authKeysJSON), &authKeys)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("authKeysJSON", *authKeysJSON).
+			Msg(`invalid auth keys JSON, must be an array like '[{"id": "foo", "token": "bar"}]'`)
+	}
+
 	adminServer, err := NewAdminServer(ctx,
 		WithListenAddr(*listenAddr),
 		WithSlinkOptions(slinkOptions...),
+		WithAuthKeys(authKeys),
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("NewAdminServer")

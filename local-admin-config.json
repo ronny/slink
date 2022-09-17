@@ -3,5 +3,6 @@
   "aws-access-key-id": "slink",
   "debug-listen-addr": ":19100",
   "log-level": "debug",
-  "pretty-log": true
+  "pretty-log": true,
+  "auth-keys": "[ {\"id\": \"test-id\", \"token\":\"test\" } ]"
 }
