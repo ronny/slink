@@ -52,7 +52,7 @@ type DynamoDBStorage struct {
 
 var _ Storage = (*DynamoDBStorage)(nil)
 
-func (d *DynamoDBStorage) Store(ctx context.Context, shortLink *models.ShortLink) error {
+func (d *DynamoDBStorage) Create(ctx context.Context, shortLink *models.ShortLink) error {
 	item := &ddbShortLinkItem{
 		ShortLink: shortLink,
 		Type:      "ShortLink",
@@ -68,10 +68,15 @@ func (d *DynamoDBStorage) Store(ctx context.Context, shortLink *models.ShortLink
 	}
 
 	_, err = d.client.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(d.tableName),
-		Item:      avItem,
+		TableName:           aws.String(d.tableName),
+		Item:                avItem,
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
 	})
 	if err != nil {
+		var ccfe *types.ConditionalCheckFailedException
+		if errors.As(err, &ccfe) {
+			return &ErrShortLinkAlreadyExists{ShortLinkID: shortLink.ID}
+		}
 		return fmt.Errorf("ddb.PutItem: %w: %v", err, avItem)
 	}
 	return nil

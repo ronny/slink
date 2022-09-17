@@ -43,7 +43,6 @@ It’s designed for secure, observable, and scalable production use.
 
 I’m planning to add these (eventually):
 
-- handle generated ID collision properly
 - some form of authentication for the admin API
 - published public docker image
 - Kubernetes deployment:

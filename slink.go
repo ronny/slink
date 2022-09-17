@@ -14,9 +14,10 @@ import (
 )
 
 type Slink struct {
-	idgen    ids.Generator
-	storage  storage.Storage
-	lruCache *lru.Cache
+	idgen             ids.Generator
+	storage           storage.Storage
+	lruCache          *lru.Cache
+	maxCreateAttempts int
 }
 
 type CreateInput struct {
@@ -61,24 +62,32 @@ func (s *Slink) CreateShortLink(ctx context.Context, input *CreateInput) (*model
 		return nil, &ErrInvalidLinkURL{msg: "link URL must not be empty"}
 	}
 
-	id, err := s.idgen.GenerateID()
-	if err != nil {
-		return nil, err
+	for attempt := 1; attempt <= s.maxCreateAttempts; attempt++ {
+		id, err := s.idgen.GenerateID()
+		if err != nil {
+			return nil, err
+		}
+
+		shortLink := &models.ShortLink{
+			ID:        id,
+			LinkURL:   input.LinkURL,
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			ExpiresAt: input.ExpiresAt,
+		}
+		err = s.storage.Create(ctx, shortLink)
+		if err != nil {
+			var ex *storage.ErrShortLinkAlreadyExists
+			if errors.As(err, &ex) {
+				log.Info().Err(ex).Int("attempt", attempt).Str("id", id).Msg("short link ID collision, retrying...")
+				continue
+			}
+			return nil, fmt.Errorf("storage.Create: %w", err)
+		} else {
+			return shortLink, nil
+		}
 	}
 
-	shortLink := &models.ShortLink{
-		ID:        id,
-		LinkURL:   input.LinkURL,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		ExpiresAt: input.ExpiresAt,
-	}
-
-	err = s.storage.Store(ctx, shortLink)
-	if err != nil {
-		return nil, fmt.Errorf("storage.Store: %w", err)
-	}
-
-	return shortLink, nil
+	return nil, &ErrCreateAttemptsExhausted{attempts: s.maxCreateAttempts}
 }
 
 // GetShortLinkByIDWithCache looks up ShortLink by the given ID from the LRU
@@ -139,6 +148,8 @@ func (s *Slink) GetShortLinksByURL(ctx context.Context, linkURL string) ([]*mode
 	return shortLinks, nil
 }
 
+const DefaultMaxCreateAttempts = 3
+
 func NewSlink(ctx context.Context, options ...func(*Slink)) (*Slink, error) {
 	lruCache, err := lru.New(1000)
 	if err != nil {
@@ -146,11 +157,16 @@ func NewSlink(ctx context.Context, options ...func(*Slink)) (*Slink, error) {
 	}
 
 	s := &Slink{
-		lruCache: lruCache,
+		lruCache:          lruCache,
+		maxCreateAttempts: DefaultMaxCreateAttempts,
 	}
 
 	for _, option := range options {
 		option(s)
+	}
+
+	if s.maxCreateAttempts < 1 {
+		return nil, errors.New("maxCreateAttempts must be at least 1")
 	}
 
 	if s.idgen == nil {
@@ -181,5 +197,11 @@ func WithIDGenerator(idgen ids.Generator) func(*Slink) {
 func WithStorage(storage storage.Storage) func(*Slink) {
 	return func(s *Slink) {
 		s.storage = storage
+	}
+}
+
+func WithMaxCreateAttempts(maxCreateAttempts int) func(*Slink) {
+	return func(s *Slink) {
+		s.maxCreateAttempts = maxCreateAttempts
 	}
 }

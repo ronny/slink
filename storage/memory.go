@@ -26,7 +26,7 @@ func NewMemoryStorage() *MemoryStorage {
 	}
 }
 
-func (s *MemoryStorage) Store(ctx context.Context, shortLink *models.ShortLink) error {
+func (s *MemoryStorage) Create(ctx context.Context, shortLink *models.ShortLink) error {
 	// TODO: don't overwrite existing ShortLink with the same ID
 	s.linkByID.Store(shortLink.ID, shortLink)
 	s.linkByURL.Store(shortLink.LinkURL, shortLink)

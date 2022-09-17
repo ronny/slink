@@ -24,8 +24,6 @@ import (
 const BootTimeout = 5 * time.Second
 
 func main() {
-	maxprocs.Set(maxprocs.Logger(log.Info().Msgf))
-
 	fs := flag.NewFlagSet("slink-public-server", flag.ExitOnError)
 	var (
 		listenAddr          = fs.String("listen-addr", ":8080", "the host:port address where the server should listen to")
@@ -59,6 +57,8 @@ func main() {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		}
 	}
+
+	maxprocs.Set(maxprocs.Logger(log.Info().Msgf))
 
 	ctx, cancelCtx := context.WithTimeout(context.Background(), BootTimeout)
 	defer cancelCtx()

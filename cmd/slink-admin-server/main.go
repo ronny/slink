@@ -25,8 +25,6 @@ import (
 const BootTimeout = 5 * time.Second
 
 func main() {
-	maxprocs.Set(maxprocs.Logger(log.Info().Msgf))
-
 	fs := flag.NewFlagSet("slink-admin-server", flag.ExitOnError)
 
 	var (
@@ -42,6 +40,7 @@ func main() {
 		debugListenAddr     = fs.String("debug-listen-addr", "", "the host:port address where the debug server should listen to (optional, only launched when specified)")
 		prettyLog           = fs.Bool("pretty-log", false, "whether to enable logs pretty-printing (inefficient), otherwise json")
 		logLevel            = fs.String("log-level", "info", "set the minimum log level")
+		maxCreateAttempts   = fs.Int("max-create-attempts", slink.DefaultMaxCreateAttempts, "the maximum number of attempts for creating a short link with a newly generated ID (in case of collisions) (must be >= 1)")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
 
@@ -65,6 +64,8 @@ func main() {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		}
 	}
+
+	maxprocs.Set(maxprocs.Logger(log.Info().Msgf))
 
 	ctx, cancelCtx := context.WithTimeout(context.Background(), BootTimeout)
 	defer cancelCtx()
@@ -109,7 +110,10 @@ func main() {
 		if err != nil {
 			log.Fatal().Err(err).Msg("storage.NewDynamoDBStorage")
 		}
-		slinkOptions = append(slinkOptions, slink.WithStorage(ddblocal))
+		slinkOptions = append(slinkOptions,
+			slink.WithStorage(ddblocal),
+			slink.WithMaxCreateAttempts(*maxCreateAttempts),
+		)
 	}
 
 	// ID Generator
