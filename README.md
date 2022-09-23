@@ -51,20 +51,18 @@ I’m planning to add these (eventually):
 - preventing too many redirects to self
 - more admin APIs:
   - update short link target URL (correct mistake on already published short link, swap target after embargo date, etc)
-  - delete short links by ID (due to mistake, abuse, disappearing target, etc)
-  - delete short links by URL
+  - expire short links by ID (due to mistake, abuse, disappearing target, etc)
+  - expire short links by URL
 - normalising Link URLs before generating a ShortLink for it
-  - lower/upper case
+  - lower/upper casing
   - query params ordering
 
 I have no plans to add these:
 
-- analytics (click/campaign tracking)
-  - can probably be solved outside of `slink`
-    - depending on the target links (the long URLs), most support things like `utm_` params
-  - I’m open to making changes to make it possible/easier
-    - e.g. opaque payload on CreateShortLink that's included in the ShortLink
-      record as is
+- built-in analytics (click/campaign tracking)
+  - it should live outside of `slink`
+  - there's already a way to send tracking
+    - can implement your own if you need anything other than SNS
 - web-based admin UI
   - it should live in a separate project
 - CLI binary
@@ -84,6 +82,7 @@ I have no plans to add these:
   - the security requirements is quite different
   - if you really want to do it, you can create your own public server using `slink`
     components
+- multi-tenancy
 - fine-grained permissions
   - any authenticated client that can hit the Admin API can do everything
   - do it elsewhere (proxy or client)

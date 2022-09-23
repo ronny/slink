@@ -20,7 +20,10 @@ func (sl *ShortLink) Expired() bool {
 
 	expiry, err := time.Parse(time.RFC3339, sl.ExpiresAt)
 	if err != nil {
-		log.Warn().Err(err).Str("ExpiresAt", sl.ExpiresAt).Msg("time.Parse ExpiresAt failed, assuming there's no expiry")
+		log.Warn().
+			Err(err).
+			Str("ExpiresAt", sl.ExpiresAt).
+			Msg("time.Parse ExpiresAt failed, assuming there's no expiry")
 		return false
 	}
 

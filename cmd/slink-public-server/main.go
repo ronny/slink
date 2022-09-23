@@ -16,6 +16,7 @@ import (
 	"github.com/ronny/slink"
 	"github.com/ronny/slink/debug"
 	"github.com/ronny/slink/storage"
+	"github.com/ronny/slink/tracking"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -35,6 +36,8 @@ func main() {
 		fallbackRedirectURL = fs.String("fallback-redirect-url", "", "when specified, and a lookup can't find a ShortLink, then it redirects to this URL as a fallback (optional)")
 		prettyLog           = fs.Bool("pretty-log", false, "whether to enable logs pretty-printing (inefficient), otherwise json")
 		logLevel            = fs.String("log-level", "info", "set the minimum log level")
+		trackingMethod      = fs.String("tracking", "", "when specified, enables tracking and also specifies the tracking method (only 'sns' is supported at the moment)")
+		snsTopicARN         = fs.String("sns-topic-arn", "", "when tracking=sns, this is the required ARN of the SNS Topic to send tracking information to")
 		_                   = fs.String("config", "", "config file (optional)")
 	)
 	err := ff.Parse(fs, os.Args[1:],
@@ -111,6 +114,7 @@ func main() {
 		Str("awsAccessKeyID", *awsAccessKeyID).
 		Str("debugListenAddr", *debugListenAddr).
 		Str("fallback-redirect-url", *fallbackRedirectURL).
+		Str("trackingMethod", *trackingMethod).
 		Msg("slink-public-server flags")
 
 	publicServerOpts := []func(*PublicServer){
@@ -120,6 +124,21 @@ func main() {
 
 	if *fallbackRedirectURL != "" {
 		publicServerOpts = append(publicServerOpts, WithFallbackRedirectURL(*fallbackRedirectURL))
+	}
+
+	if *trackingMethod != "" {
+		if *trackingMethod != "sns" {
+			log.Fatal().Str("trackingMethod", *trackingMethod).Msg("only 'sns' tracking is supported")
+		}
+		if *snsTopicARN == "" {
+			log.Fatal().Msg("sns-topic-arn is required when tracking is set to 'sns'")
+		}
+		tracker, err := tracking.NewSNSTracker(ctx, *snsTopicARN)
+		if err != nil {
+			log.Fatal().Err(err).Msg("tracking.NewSNSTracker failed")
+		}
+		// ⚠️ this assumes the public server is deployed in AWS behind ELB/ALB/CloudFront
+		publicServerOpts = append(publicServerOpts, WithTracker(tracker, tracking.DefaultAWSTrustedHeaders))
 	}
 
 	publicServer, err := NewPublicServer(ctx, publicServerOpts...)
