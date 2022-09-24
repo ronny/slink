@@ -59,9 +59,9 @@ I’m planning to add these (eventually):
 
 I have no plans to add these:
 
-- built-in analytics (click/campaign tracking)
+- built-in analytics (beyond tracking)
   - it should live outside of `slink`
-  - there's already a way to send tracking
+  - there's already a way to track
     - can implement your own if you need anything other than SNS
 - web-based admin UI
   - it should live in a separate project

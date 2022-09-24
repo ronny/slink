@@ -52,6 +52,8 @@ func NewAdminServer(ctx context.Context, options ...func(*AdminServer)) (*AdminS
 	}
 
 	s.router = httprouter.New()
+	s.router.GET("/_live", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) { w.WriteHeader(http.StatusOK) })
+	s.router.GET("/_ready", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) { w.WriteHeader(http.StatusOK) })
 	s.apiRoute(http.MethodPost, "/get-or-create-short-link", s.handleGetOrCreateShortLink())
 	s.apiRoute(http.MethodPost, "/create-short-link", s.handleCreateShortLink())
 	s.apiRoute(http.MethodGet, "/short-link/:id", s.handleGetShortLink())

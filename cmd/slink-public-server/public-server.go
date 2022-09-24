@@ -48,6 +48,7 @@ func NewPublicServer(ctx context.Context, options ...func(*PublicServer)) (*Publ
 	}
 
 	s.router = httprouter.New()
+	s.router.GET("/", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) { w.WriteHeader(http.StatusOK) })
 	s.apiRoute(http.MethodGet, "/:id", s.handleShortLinkLookup())
 	s.Handler = s.router
 
