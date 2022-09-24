@@ -37,15 +37,14 @@ It’s designed for secure, observable, and scalable production use.
 - Use `slink` as a library, extend it, build your own
   - supply your own short ID generator
   - supply your own storage backend
+  - supply your own tracking mechanism
 - Opinionated reasonable defaults for production
 
 ## What's missing?
 
 I’m planning to add these (eventually):
 
-- published public docker image
 - Kubernetes deployment:
-  - healthcheck routes
   - documentation
 - tests
 - preventing too many redirects to self
